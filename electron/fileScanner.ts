@@ -50,18 +50,24 @@ function getCategory(ext: string): string {
 
 /**
  * Recursively scans a directory and categorizes files by extension.
+ * Depth-limited to avoid scanning the entire disk (default 2 levels).
  * @param dirPath - Absolute path to the directory to scan
+ * @param depth - Max recursion depth (default 2); 0 = current dir only
  * @returns ScanResult with flat file list and grouped by category
  */
-export async function scanDirectory(dirPath: string): Promise<ScanResult> {
+export async function scanDirectory(
+  dirPath: string,
+  depth: number = 2
+): Promise<ScanResult> {
   const files: ScannedFile[] = [];
   const normalizedRoot = path.resolve(dirPath);
 
-  async function walk(currentDir: string): Promise<void> {
+  async function walk(currentDir: string, remainingDepth: number): Promise<void> {
     let entries: fs.Dirent[];
     try {
       entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
-    } catch {
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err && (err as NodeJS.ErrnoException).code === "EACCES") return;
       return;
     }
 
@@ -69,7 +75,9 @@ export async function scanDirectory(dirPath: string): Promise<ScanResult> {
       const fullPath = path.join(currentDir, entry.name);
 
       if (entry.isDirectory()) {
-        await walk(fullPath);
+        if (remainingDepth > 0) {
+          await walk(fullPath, remainingDepth - 1);
+        }
         continue;
       }
 
@@ -88,7 +96,7 @@ export async function scanDirectory(dirPath: string): Promise<ScanResult> {
     }
   }
 
-  await walk(normalizedRoot);
+  await walk(normalizedRoot, depth);
 
   const byCategory: Record<string, ScannedFile[]> = {};
   for (const file of files) {
