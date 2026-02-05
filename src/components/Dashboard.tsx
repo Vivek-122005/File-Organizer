@@ -9,6 +9,8 @@ import {
   Music,
 } from "lucide-react";
 import type { ScanResult } from "../types/fileScanner";
+import type { DiskVizNode } from "../types/diskViz";
+import { DiskVisualizer } from "./DiskVisualizer";
 
 const GLASS_CLASS =
   "rounded-3xl border border-border-subtle bg-secondary/80 backdrop-blur-glass";
@@ -25,6 +27,8 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>
 
 interface DashboardProps {
   result: ScanResult | null;
+  vizData: DiskVizNode | null;
+  vizLoading: boolean;
   loading: boolean;
   error: string | null;
   directoryPath: string | null;
@@ -36,6 +40,8 @@ interface DashboardProps {
  */
 export function Dashboard({
   result,
+  vizData,
+  vizLoading,
   loading,
   error,
   directoryPath,
@@ -99,7 +105,7 @@ export function Dashboard({
   );
 
   return (
-    <div className="p-6">
+    <div>
       <div className="mb-2 truncate text-xs text-white/50" title={directoryPath}>
         {directoryPath}
       </div>
@@ -133,6 +139,20 @@ export function Dashboard({
             </div>
           );
         })}
+      </div>
+      <div className="mt-6">
+        <h2 className="mb-3 text-sm font-medium text-white/70">
+          Disk usage
+        </h2>
+        {vizLoading && (
+          <div className={`flex items-center justify-center gap-2 ${GLASS_CLASS} py-8`}>
+            <Loader2 className="h-5 w-5 animate-spin text-white/60" />
+            <span className="text-sm text-white/60">Building disk map…</span>
+          </div>
+        )}
+        {!vizLoading && (
+          <DiskVisualizer data={vizData} isLoading={vizLoading} />
+        )}
       </div>
     </div>
   );
