@@ -193,7 +193,7 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
 
   if (loading) {
     return (
-      <div className="flex h-full min-h-[320px] items-center justify-center rounded-2xl border border-border-subtle bg-secondary/60">
+      <div className="flex h-full min-h-[320px] items-center justify-center rounded-2xl border border-border-subtle bg-secondary/80 backdrop-blur-glass">
         <p className="text-sm text-white/60">Loading…</p>
       </div>
     );
@@ -224,10 +224,10 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
                 open: true,
               });
             }}
-            className={`flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition [-webkit-app-region:no-drag] ${entry.isDirectory
-                ? "border-border-subtle bg-secondary/60 hover:bg-secondary/80"
-                : "border-border-subtle bg-secondary/40 hover:bg-secondary/60"
-              } ${isSelected ? "border-white/30 bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.15)]" : ""}`}
+            className={`flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition [-webkit-app-region:no-drag] border-border-subtle ${entry.isDirectory
+              ? "bg-secondary/80 backdrop-blur-glass hover:bg-white/5"
+              : "bg-secondary/60 backdrop-blur-glass hover:bg-white/5"
+              } ${isSelected ? "ring-2 ring-blue-500/50 shadow-sm" : ""}`}
           >
             <div
               className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${entry.isDirectory ? "bg-amber-500/20" : "bg-white/5"
@@ -268,7 +268,7 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
   );
 
   const renderList = () => (
-    <div className="overflow-auto rounded-2xl border border-border-subtle bg-secondary/60">
+    <div className="overflow-auto rounded-2xl border border-border-subtle bg-secondary/80 backdrop-blur-glass">
       <table className="min-w-full text-left text-xs text-white/80">
         <thead className="bg-secondary/80">
           <tr>
@@ -309,10 +309,10 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
                     open: true,
                   });
                 }}
-                className={`cursor-default border-t border-white/5 align-middle transition [-webkit-app-region:no-drag] ${idx % 2 === 0 ? "bg-white/0" : "bg-white/5"
+                className={`cursor-default border-t border-white/5 align-middle transition [-webkit-app-region:no-drag] ${idx % 2 === 0 ? "bg-transparent" : "bg-white/[0.02]"
                   } ${isSelected
-                    ? "bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.2)]"
-                    : "hover:bg-white/10"
+                    ? "bg-white/10 shadow-[inner_0_0_0_1px_rgba(255,255,255,0.1)]"
+                    : "hover:bg-white/5"
                   }`}
               >
                 <td className="max-w-[260px] px-4 py-2">
@@ -381,8 +381,8 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
             type="button"
             onClick={() => setViewMode("grid")}
             className={`flex items-center gap-1 rounded-xl px-2 py-1 [-webkit-app-region:no-drag] ${viewMode === "grid"
-                ? "bg-white/15 text-white"
-                : "bg-secondary/70 text-white/70 hover:bg-white/5"
+              ? "bg-white/15 text-white"
+              : "bg-secondary/70 text-white/70 hover:bg-white/5"
               }`}
           >
             <LayoutGrid className="h-3.5 w-3.5" />
@@ -392,8 +392,8 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
             type="button"
             onClick={() => setViewMode("list")}
             className={`flex items-center gap-1 rounded-xl px-2 py-1 [-webkit-app-region:no-drag] ${viewMode === "list"
-                ? "bg-white/15 text-white"
-                : "bg-secondary/70 text-white/70 hover:bg-white/5"
+              ? "bg-white/15 text-white"
+              : "bg-secondary/70 text-white/70 hover:bg-white/5"
               }`}
           >
             <ListIcon className="h-3.5 w-3.5" />

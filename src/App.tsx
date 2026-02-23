@@ -12,7 +12,7 @@ import type { DiskVizNode } from "./types/diskViz";
 import { Loader2 } from "lucide-react";
 
 const GLASS =
-  "rounded-3xl border border-border-subtle bg-secondary/80 backdrop-blur-glass";
+  "rounded-2xl border border-border-subtle bg-secondary/80 backdrop-blur-glass";
 
 function App() {
   const { currentPath, loadFavorites, favorites, navigateTo } = useFileStore();
@@ -104,17 +104,17 @@ function App() {
         <ControlBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-border-subtle pb-2">
+        <div className="flex items-center gap-1 rounded-xl border border-border-subtle bg-secondary/80 p-1 backdrop-blur-glass w-fit">
           <button
             onClick={() => setActiveTab("explorer")}
-            className={`px-4 py-1.5 text-sm font-medium transition-colors ${activeTab === "explorer" ? "border-b-2 border-white text-white" : "text-white/50 hover:text-white"
+            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${activeTab === "explorer" ? "bg-white/15 text-white shadow-sm" : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
           >
             Files
           </button>
           <button
             onClick={() => setActiveTab("dashboard")}
-            className={`px-4 py-1.5 text-sm font-medium transition-colors ${activeTab === "dashboard" ? "border-b-2 border-white text-white" : "text-white/50 hover:text-white"
+            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${activeTab === "dashboard" ? "bg-white/15 text-white shadow-sm" : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
           >
             Auto Organize Summary

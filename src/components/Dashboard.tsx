@@ -19,7 +19,7 @@ import type { DiskVizNode } from "../types/diskViz";
 import { DiskVisualizer } from "./DiskVisualizer";
 
 const GLASS_CLASS =
-  "rounded-3xl border border-border-subtle bg-secondary/80 backdrop-blur-glass";
+  "rounded-2xl border border-border-subtle bg-secondary/80 backdrop-blur-glass";
 
 const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Image: ImageIcon,
