@@ -70,6 +70,8 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
     selectedEntry,
     setSelectedEntry,
     addFavorite,
+    removeFavoriteByPath,
+    sidebarFavorites,
   } = useFileStore();
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -424,21 +426,31 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            type="button"
-            className="block w-full px-3 py-1.5 text-left hover:bg-white/10"
-            onClick={() => {
-              const entry = contextMenu.entry;
-              if (entry?.isDirectory) {
-                addFavorite(entry.path);
-              }
-              setContextMenu((s) => ({ ...s, open: false }));
-            }}
-          >
-            Add to Favorites
-          </button>
-
-          <div className="my-1 h-px bg-white/10" />
+          {contextMenu.entry?.isDirectory && (() => {
+            const isFav = sidebarFavorites.some((f) => f.path === contextMenu.entry!.path);
+            return (
+              <>
+                <button
+                  type="button"
+                  className="block w-full px-3 py-1.5 text-left hover:bg-white/10"
+                  onClick={() => {
+                    const entry = contextMenu.entry;
+                    if (entry) {
+                      if (isFav) {
+                        removeFavoriteByPath(entry.path);
+                      } else {
+                        addFavorite(entry.path);
+                      }
+                    }
+                    setContextMenu((s) => ({ ...s, open: false }));
+                  }}
+                >
+                  {isFav ? "Remove from Favorites" : "Add to Favorites"}
+                </button>
+                <div className="my-1 h-px bg-white/10" />
+              </>
+            );
+          })()}
 
           <button
             type="button"

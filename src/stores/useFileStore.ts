@@ -46,124 +46,130 @@ interface FileStore {
   setSelectedEntry: (entry: DirEntry | null) => void;
   addFavorite: (path: string) => void;
   removeFavorite: (id: string) => void;
+  removeFavoriteByPath: (path: string) => void;
   reorderFavorites: (oldIndex: number, newIndex: number) => void;
 }
 
 export const useFileStore = create<FileStore>()(
   persist(
     (set, get) => ({
-  currentPath: null,
-  history: [],
-  future: [],
-  favorites: [],
-  sidebarFavorites: [],
-   viewMode: "grid",
-   sortConfig: { by: "name", order: "asc" },
-  selectedEntry: null,
-
-  setCurrentPath: (path) => set({ currentPath: path }),
-
-  setFavorites: (items) => set({ favorites: items }),
-
-  loadFavorites: async () => {
-    const api = window.electron;
-    if (!api?.getSystemPaths) return;
-    const paths = await api.getSystemPaths();
-    const items: FavoriteItem[] = [
-      { name: "Home", path: paths.home },
-      { name: "Desktop", path: paths.desktop },
-      { name: "Downloads", path: paths.downloads },
-      { name: "Music", path: paths.music },
-    ];
-    set({
-      favorites: items,
-      currentPath: paths.home,
+      currentPath: null,
       history: [],
       future: [],
-    });
-  },
+      favorites: [],
+      sidebarFavorites: [],
+      viewMode: "grid",
+      sortConfig: { by: "name", order: "asc" },
+      selectedEntry: null,
 
-  navigateTo: (path) => {
-    set((s) => ({
-      currentPath: path,
-      history:
-        s.currentPath != null && s.currentPath !== path
-          ? [...s.history, s.currentPath]
-          : s.history,
-      future: [],
-    }));
-  },
+      setCurrentPath: (path) => set({ currentPath: path }),
 
-  goBack: () => {
-    const { history, currentPath } = get();
-    if (history.length === 0 || currentPath == null) return;
-    const prev = history[history.length - 1];
-    set({
-      currentPath: prev,
-      history: history.slice(0, -1),
-      future: [currentPath, ...get().future],
-    });
-  },
+      setFavorites: (items) => set({ favorites: items }),
 
-  goForward: () => {
-    const { future, currentPath } = get();
-    if (future.length === 0 || currentPath == null) return;
-    const next = future[0];
-    set({
-      currentPath: next,
-      history: [...get().history, currentPath],
-      future: future.slice(1),
-    });
-  },
+      loadFavorites: async () => {
+        const api = window.electron;
+        if (!api?.getSystemPaths) return;
+        const paths = await api.getSystemPaths();
+        const items: FavoriteItem[] = [
+          { name: "Home", path: paths.home },
+          { name: "Desktop", path: paths.desktop },
+          { name: "Downloads", path: paths.downloads },
+          { name: "Music", path: paths.music },
+        ];
+        set({
+          favorites: items,
+          currentPath: paths.home,
+          history: [],
+          future: [],
+        });
+      },
 
-  goUp: () => {
-    const api = window.electron;
-    const { currentPath } = get();
-    if (!currentPath || !api?.getParentPath) return;
-    api.getParentPath(currentPath).then((parent) => {
-      if (parent != null && parent !== currentPath) get().navigateTo(parent);
-    });
-  },
+      navigateTo: (path) => {
+        set((s) => ({
+          currentPath: path,
+          history:
+            s.currentPath != null && s.currentPath !== path
+              ? [...s.history, s.currentPath]
+              : s.history,
+          future: [],
+        }));
+      },
 
-  setViewMode: (mode) => set({ viewMode: mode }),
+      goBack: () => {
+        const { history, currentPath } = get();
+        if (history.length === 0 || currentPath == null) return;
+        const prev = history[history.length - 1];
+        set({
+          currentPath: prev,
+          history: history.slice(0, -1),
+          future: [currentPath, ...get().future],
+        });
+      },
 
-  setSortConfig: (config) => set({ sortConfig: config }),
+      goForward: () => {
+        const { future, currentPath } = get();
+        if (future.length === 0 || currentPath == null) return;
+        const next = future[0];
+        set({
+          currentPath: next,
+          history: [...get().history, currentPath],
+          future: future.slice(1),
+        });
+      },
 
-  setSelectedEntry: (entry) => set({ selectedEntry: entry }),
+      goUp: () => {
+        const api = window.electron;
+        const { currentPath } = get();
+        if (!currentPath || !api?.getParentPath) return;
+        api.getParentPath(currentPath).then((parent) => {
+          if (parent != null && parent !== currentPath) get().navigateTo(parent);
+        });
+      },
 
-  addFavorite: (path) => {
-    const existing = get().sidebarFavorites.find((f) => f.path === path);
-    if (existing) return;
-    const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
-    let icon = "folder";
-    const lower = name.toLowerCase();
-    if (lower.includes("download")) icon = "download";
-    else if (lower.includes("music")) icon = "music";
-    else if (lower.includes("desktop")) icon = "monitor";
-    else if (lower.includes("doc")) icon = "file-text";
-    else if (lower.includes("project")) icon = "folder-git-2";
+      setViewMode: (mode) => set({ viewMode: mode }),
 
-    const id = `${name}-${Date.now()}`;
-    set((s) => ({
-      sidebarFavorites: [
-        ...s.sidebarFavorites,
-        { id, name, path, icon },
-      ],
-    }));
-  },
+      setSortConfig: (config) => set({ sortConfig: config }),
 
-  removeFavorite: (id) =>
-    set((s) => ({
-      sidebarFavorites: s.sidebarFavorites.filter((f) => f.id !== id),
-    })),
+      setSelectedEntry: (entry) => set({ selectedEntry: entry }),
 
-  reorderFavorites: (oldIndex, newIndex) =>
-    set((s) => {
-      const list = [...s.sidebarFavorites];
-      const [item] = list.splice(oldIndex, 1);
-      list.splice(newIndex, 0, item);
-      return { sidebarFavorites: list };
-    }),
+      addFavorite: (path) => {
+        const existing = get().sidebarFavorites.find((f) => f.path === path);
+        if (existing) return;
+        const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+        let icon = "folder";
+        const lower = name.toLowerCase();
+        if (lower.includes("download")) icon = "download";
+        else if (lower.includes("music")) icon = "music";
+        else if (lower.includes("desktop")) icon = "monitor";
+        else if (lower.includes("doc")) icon = "file-text";
+        else if (lower.includes("project")) icon = "folder-git-2";
+
+        const id = `${name}-${Date.now()}`;
+        set((s) => ({
+          sidebarFavorites: [
+            ...s.sidebarFavorites,
+            { id, name, path, icon },
+          ],
+        }));
+      },
+
+      removeFavorite: (id) =>
+        set((s) => ({
+          sidebarFavorites: s.sidebarFavorites.filter((f) => f.id !== id),
+        })),
+
+      removeFavoriteByPath: (path) =>
+        set((s) => ({
+          sidebarFavorites: s.sidebarFavorites.filter((f) => f.path !== path),
+        })),
+
+      reorderFavorites: (oldIndex, newIndex) =>
+        set((s) => {
+          const list = [...s.sidebarFavorites];
+          const [item] = list.splice(oldIndex, 1);
+          list.splice(newIndex, 0, item);
+          return { sidebarFavorites: list };
+        }),
     }),
     {
       name: "nexus-file-store",
