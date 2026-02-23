@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
 
-/** Extension → category label. Lowercase keys for lookup. */
 const EXTENSION_CATEGORY: Record<string, string> = {
   jpg: "Image",
   jpeg: "Image",
@@ -9,11 +8,19 @@ const EXTENSION_CATEGORY: Record<string, string> = {
   gif: "Image",
   webp: "Image",
   svg: "Image",
-  pdf: "Doc",
-  doc: "Doc",
-  docx: "Doc",
-  txt: "Doc",
-  md: "Doc",
+  pdf: "PDF",
+  doc: "Document",
+  docx: "Document",
+  txt: "Document",
+  md: "Document",
+  rtf: "Document",
+  csv: "Spreadsheet",
+  xls: "Spreadsheet",
+  xlsx: "Spreadsheet",
+  numbers: "Spreadsheet",
+  ppt: "Presentation",
+  pptx: "Presentation",
+  key: "Presentation",
   py: "Code",
   js: "Code",
   ts: "Code",
@@ -26,12 +33,17 @@ const EXTENSION_CATEGORY: Record<string, string> = {
   wav: "Audio",
   mp4: "Video",
   mov: "Video",
+  mkv: "Video",
+  webm: "Video",
   zip: "Archive",
   tar: "Archive",
   gz: "Archive",
+  rar: "Archive",
+  "7z": "Archive",
 };
 
 export interface ScannedFile {
+  name: string;
   filePath: string;
   relativePath: string;
   extension: string;
@@ -44,24 +56,34 @@ export interface ScanResult {
   totalCount: number;
 }
 
-function getCategory(ext: string): string {
+function getCategory(ext: string, name: string): string {
+  const lowerName = name.toLowerCase();
+  if (lowerName.includes("screenshot") || lowerName.includes("screen shot")) {
+    return "Screenshot";
+  }
   return EXTENSION_CATEGORY[ext.toLowerCase()] ?? "Other";
 }
 
 /**
  * Recursively scans a directory and categorizes files by extension.
+ * Depth-limited to avoid scanning the entire disk (default 2 levels).
  * @param dirPath - Absolute path to the directory to scan
+ * @param depth - Max recursion depth (default 2); 0 = current dir only
  * @returns ScanResult with flat file list and grouped by category
  */
-export async function scanDirectory(dirPath: string): Promise<ScanResult> {
+export async function scanDirectory(
+  dirPath: string,
+  depth: number = 2
+): Promise<ScanResult> {
   const files: ScannedFile[] = [];
   const normalizedRoot = path.resolve(dirPath);
 
-  async function walk(currentDir: string): Promise<void> {
+  async function walk(currentDir: string, remainingDepth: number): Promise<void> {
     let entries: fs.Dirent[];
     try {
       entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
-    } catch {
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err && (err as NodeJS.ErrnoException).code === "EACCES") return;
       return;
     }
 
@@ -69,17 +91,20 @@ export async function scanDirectory(dirPath: string): Promise<ScanResult> {
       const fullPath = path.join(currentDir, entry.name);
 
       if (entry.isDirectory()) {
-        await walk(fullPath);
+        if (remainingDepth > 0) {
+          await walk(fullPath, remainingDepth - 1);
+        }
         continue;
       }
 
       if (!entry.isFile()) continue;
 
       const ext = path.extname(entry.name).slice(1) || "";
-      const category = getCategory(ext);
+      const category = getCategory(ext, entry.name);
       const relativePath = path.relative(normalizedRoot, fullPath);
 
       files.push({
+        name: entry.name,
         filePath: fullPath,
         relativePath,
         extension: ext ? `.${ext}` : "",
@@ -88,7 +113,7 @@ export async function scanDirectory(dirPath: string): Promise<ScanResult> {
     }
   }
 
-  await walk(normalizedRoot);
+  await walk(normalizedRoot, depth);
 
   const byCategory: Record<string, ScannedFile[]> = {};
   for (const file of files) {

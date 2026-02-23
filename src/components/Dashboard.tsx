@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Archive,
   Code2,
@@ -7,15 +8,26 @@ import {
   Image as ImageIcon,
   Loader2,
   Music,
+  ScanEye,
+  FileBox,
+  AreaChart,
+  Presentation as PresentationIcon,
+  ExternalLink,
 } from "lucide-react";
 import type { ScanResult } from "../types/fileScanner";
+import type { DiskVizNode } from "../types/diskViz";
+import { DiskVisualizer } from "./DiskVisualizer";
 
 const GLASS_CLASS =
-  "rounded-3xl border border-border-subtle bg-secondary/80 backdrop-blur-glass";
+  "rounded-2xl border border-border-subtle bg-secondary/80 backdrop-blur-glass";
 
 const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Image: ImageIcon,
-  Doc: FileText,
+  Screenshot: ScanEye,
+  PDF: FileBox,
+  Document: FileText,
+  Spreadsheet: AreaChart,
+  Presentation: PresentationIcon,
   Code: Code2,
   Audio: Music,
   Video: Film,
@@ -25,6 +37,8 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>
 
 interface DashboardProps {
   result: ScanResult | null;
+  vizData: DiskVizNode | null;
+  vizLoading: boolean;
   loading: boolean;
   error: string | null;
   directoryPath: string | null;
@@ -36,10 +50,13 @@ interface DashboardProps {
  */
 export function Dashboard({
   result,
+  vizData,
+  vizLoading,
   loading,
   error,
   directoryPath,
 }: DashboardProps) {
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center p-8">
@@ -99,7 +116,7 @@ export function Dashboard({
   );
 
   return (
-    <div className="p-6">
+    <div>
       <div className="mb-2 truncate text-xs text-white/50" title={directoryPath}>
         {directoryPath}
       </div>
@@ -116,10 +133,13 @@ export function Dashboard({
         </div>
         {categories.map(([category, files]) => {
           const Icon = CATEGORY_ICONS[category] ?? Folder;
+          const isSelected = selectedCategory === category;
           return (
-            <div
+            <button
               key={category}
-              className={`flex items-center gap-4 p-5 ${GLASS_CLASS}`}
+              onClick={() => setSelectedCategory(isSelected ? null : category)}
+              type="button"
+              className={`flex items-center gap-4 p-5 text-left transition-colors [-webkit-app-region:no-drag] ${GLASS_CLASS} hover:bg-white/5 ${isSelected ? 'ring-2 ring-blue-500/50' : ''}`}
             >
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/5 border border-border-subtle">
                 <Icon className="h-5 w-5 text-white/80" />
@@ -130,9 +150,75 @@ export function Dashboard({
                   {files.length} file{files.length !== 1 ? "s" : ""}
                 </p>
               </div>
-            </div>
+            </button>
           );
         })}
+      </div>
+
+      {selectedCategory && result && (
+        <div className="mt-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-medium text-white/70">
+              Files in <span className="text-white">{selectedCategory}</span>
+            </h2>
+          </div>
+          <div className={`overflow-hidden ${GLASS_CLASS}`}>
+            <div className="max-h-[300px] overflow-y-auto">
+              <table className="min-w-full text-left text-xs text-white/80">
+                <thead className="sticky top-0 bg-secondary/90 backdrop-blur-md">
+                  <tr>
+                    <th className="px-4 py-3 font-medium border-b border-border-subtle">Name</th>
+                    <th className="px-4 py-3 font-medium border-b border-border-subtle text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.byCategory[selectedCategory]?.map((file, idx) => (
+                    <tr
+                      key={file.filePath}
+                      className={`border-t border-white/5 hover:bg-white/5 transition-colors ${idx % 2 === 0 ? "bg-white/0" : "bg-white/[0.02]"
+                        }`}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="truncate max-w-[400px] font-medium text-white/90">
+                            {file.name}
+                          </span>
+                          <span className="truncate max-w-[400px] text-[10px] text-white/40">
+                            {file.relativePath}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => window.electron?.openPath?.(file.filePath)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-white text-xs [-webkit-app-region:no-drag]"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Open
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="mt-6">
+        <h2 className="mb-3 text-sm font-medium text-white/70">
+          Disk usage
+        </h2>
+        {vizLoading && (
+          <div className={`flex items-center justify-center gap-2 ${GLASS_CLASS} py-8`}>
+            <Loader2 className="h-5 w-5 animate-spin text-white/60" />
+            <span className="text-sm text-white/60">Building disk map…</span>
+          </div>
+        )}
+        {!vizLoading && (
+          <DiskVisualizer data={vizData} isLoading={vizLoading} />
+        )}
       </div>
     </div>
   );
