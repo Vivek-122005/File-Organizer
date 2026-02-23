@@ -80,16 +80,52 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
     open: false,
   });
   const [quickLookOpen, setQuickLookOpen] = useState(false);
+  const [renamingEntry, setRenamingEntry] = useState<DirEntry | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
-  useEffect(() => {
+  const fetchDir = () => {
     if (!currentPath || !window.electron?.listDirectory) return;
-    setLoading(true);
     window.electron
       .listDirectory(currentPath)
       .then(setEntries)
       .catch(() => setEntries([]))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (!currentPath) return;
+    setLoading(true);
+    fetchDir();
+
+    window.electron?.watchDirectory?.(currentPath);
+    const unsub = window.electron?.onDirectoryChanged?.((dirPath) => {
+      if (dirPath === currentPath) fetchDir();
+    });
+    return () => {
+      window.electron?.unwatchDirectory?.();
+      unsub?.();
+    };
   }, [currentPath]);
+
+  const handleDelete = async (entry: DirEntry) => {
+    const ok = await window.electron?.deleteFile?.(entry.path);
+    if (!ok) alert("Failed to move item to trash.");
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!renamingEntry || !renameValue.trim() || !window.electron?.renameFile) {
+      setRenamingEntry(null);
+      return;
+    }
+    const slashIndex = Math.max(renamingEntry.path.lastIndexOf("/"), renamingEntry.path.lastIndexOf("\\"));
+    const newPathString = renamingEntry.path.substring(0, slashIndex + 1) + renameValue.trim();
+
+    if (newPathString !== renamingEntry.path) {
+      const ok = await window.electron.renameFile(renamingEntry.path, newPathString);
+      if (!ok) alert("Failed to rename item.");
+    }
+    setRenamingEntry(null);
+  };
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return entries;
@@ -188,16 +224,14 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
                 open: true,
               });
             }}
-            className={`flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition [-webkit-app-region:no-drag] ${
-              entry.isDirectory
+            className={`flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition [-webkit-app-region:no-drag] ${entry.isDirectory
                 ? "border-border-subtle bg-secondary/60 hover:bg-secondary/80"
                 : "border-border-subtle bg-secondary/40 hover:bg-secondary/60"
-            } ${isSelected ? "border-white/30 bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.15)]" : ""}`}
+              } ${isSelected ? "border-white/30 bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.15)]" : ""}`}
           >
             <div
-              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
-                entry.isDirectory ? "bg-amber-500/20" : "bg-white/5"
-              }`}
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${entry.isDirectory ? "bg-amber-500/20" : "bg-white/5"
+                }`}
             >
               {isImageFile(entry.name) && !entry.isDirectory ? (
                 <img
@@ -209,9 +243,24 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
                 <Icon className="h-6 w-6 text-white/90" />
               )}
             </div>
-            <span className="max-w-full truncate text-xs font-medium text-white/90">
-              {entry.name}
-            </span>
+            {renamingEntry?.path === entry.path ? (
+              <input
+                autoFocus
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleRenameSubmit();
+                  if (e.key === "Escape") setRenamingEntry(null);
+                }}
+                onBlur={handleRenameSubmit}
+                onClick={(e) => e.stopPropagation()}
+                className="max-w-full rounded bg-secondary/80 px-1 text-xs text-white outline-none ring-1 ring-white/30"
+              />
+            ) : (
+              <span className="max-w-full truncate text-xs font-medium text-white/90">
+                {entry.name}
+              </span>
+            )}
           </button>
         );
       })}
@@ -236,16 +285,16 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
             const typeLabel = entry.isDirectory
               ? "Folder"
               : getFileIcon(entry.name) === FileImage
-              ? "Image"
-              : getFileIcon(entry.name) === FileCode
-              ? "Code"
-              : getFileIcon(entry.name) === FileMusic
-              ? "Music"
-              : getFileIcon(entry.name) === FileVideo
-              ? "Video"
-              : getFileIcon(entry.name) === FileArchive
-              ? "Archive"
-              : "File";
+                ? "Image"
+                : getFileIcon(entry.name) === FileCode
+                  ? "Code"
+                  : getFileIcon(entry.name) === FileMusic
+                    ? "Music"
+                    : getFileIcon(entry.name) === FileVideo
+                      ? "Video"
+                      : getFileIcon(entry.name) === FileArchive
+                        ? "Archive"
+                        : "File";
             return (
               <tr
                 key={entry.path}
@@ -260,18 +309,31 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
                     open: true,
                   });
                 }}
-                className={`cursor-default border-t border-white/5 align-middle transition [-webkit-app-region:no-drag] ${
-                  idx % 2 === 0 ? "bg-white/0" : "bg-white/5"
-                } ${
-                  isSelected
+                className={`cursor-default border-t border-white/5 align-middle transition [-webkit-app-region:no-drag] ${idx % 2 === 0 ? "bg-white/0" : "bg-white/5"
+                  } ${isSelected
                     ? "bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.2)]"
                     : "hover:bg-white/10"
-                }`}
+                  }`}
               >
                 <td className="max-w-[260px] px-4 py-2">
                   <div className="flex items-center gap-2">
                     <Icon className="h-4 w-4 shrink-0 text-white/80" />
-                    <span className="truncate">{entry.name}</span>
+                    {renamingEntry?.path === entry.path ? (
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleRenameSubmit();
+                          if (e.key === "Escape") setRenamingEntry(null);
+                        }}
+                        onBlur={handleRenameSubmit}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full rounded bg-transparent px-1 text-white outline-none ring-1 ring-white/30 truncate"
+                      />
+                    ) : (
+                      <span className="truncate">{entry.name}</span>
+                    )}
                   </div>
                 </td>
                 <td className="px-4 py-2 text-white/60">
@@ -294,8 +356,8 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
       value === "name-asc"
         ? { by: "name", order: "asc" }
         : value === "date-desc"
-        ? { by: "date", order: "desc" }
-        : { by: "size", order: "desc" };
+          ? { by: "date", order: "desc" }
+          : { by: "size", order: "desc" };
     setSortConfig(next);
   };
 
@@ -303,8 +365,8 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
     sortConfig.by === "name"
       ? "name-asc"
       : sortConfig.by === "date"
-      ? "date-desc"
-      : "size-desc";
+        ? "date-desc"
+        : "size-desc";
 
   return (
     <div
@@ -318,11 +380,10 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
           <button
             type="button"
             onClick={() => setViewMode("grid")}
-            className={`flex items-center gap-1 rounded-xl px-2 py-1 [-webkit-app-region:no-drag] ${
-              viewMode === "grid"
+            className={`flex items-center gap-1 rounded-xl px-2 py-1 [-webkit-app-region:no-drag] ${viewMode === "grid"
                 ? "bg-white/15 text-white"
                 : "bg-secondary/70 text-white/70 hover:bg-white/5"
-            }`}
+              }`}
           >
             <LayoutGrid className="h-3.5 w-3.5" />
             <span>Grid</span>
@@ -330,11 +391,10 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
           <button
             type="button"
             onClick={() => setViewMode("list")}
-            className={`flex items-center gap-1 rounded-xl px-2 py-1 [-webkit-app-region:no-drag] ${
-              viewMode === "list"
+            className={`flex items-center gap-1 rounded-xl px-2 py-1 [-webkit-app-region:no-drag] ${viewMode === "list"
                 ? "bg-white/15 text-white"
                 : "bg-secondary/70 text-white/70 hover:bg-white/5"
-            }`}
+              }`}
           >
             <ListIcon className="h-3.5 w-3.5" />
             <span>List</span>
@@ -376,6 +436,35 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
             }}
           >
             Add to Favorites
+          </button>
+
+          <div className="my-1 h-px bg-white/10" />
+
+          <button
+            type="button"
+            className="block w-full px-3 py-1.5 text-left hover:bg-white/10"
+            onClick={() => {
+              if (contextMenu.entry) {
+                setRenamingEntry(contextMenu.entry);
+                setRenameValue(contextMenu.entry.name);
+              }
+              setContextMenu((s) => ({ ...s, open: false }));
+            }}
+          >
+            Rename
+          </button>
+
+          <button
+            type="button"
+            className="block w-full px-3 py-1.5 text-left text-red-400 hover:bg-red-500/20"
+            onClick={() => {
+              if (contextMenu.entry) {
+                handleDelete(contextMenu.entry);
+              }
+              setContextMenu((s) => ({ ...s, open: false }));
+            }}
+          >
+            Move to Trash
           </button>
         </div>
       )}

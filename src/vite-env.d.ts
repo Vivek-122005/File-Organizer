@@ -30,8 +30,13 @@ declare global {
       getParentPath: (dirPath: string) => Promise<string | null>;
       openPath: (filePath: string) => Promise<{ error: string }>;
       readFilePreview: (filePath: string, maxBytes?: number) => Promise<string>;
+      deleteFile: (filePath: string) => Promise<boolean>;
+      renameFile: (oldPath: string, newPath: string) => Promise<boolean>;
+      watchDirectory: (dirPath: string) => void;
+      unwatchDirectory: () => void;
+      onDirectoryChanged: (callback: (dirPath: string) => void) => () => void;
     };
   }
 }
 
-export {};
+export { };

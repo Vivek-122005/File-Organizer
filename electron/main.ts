@@ -138,6 +138,8 @@ async function checkAccess(targetPath: string): Promise<boolean> {
   }
 }
 
+let currentWatcher: fs.FSWatcher | null = null;
+
 /** Registers safe IPC handlers for renderer communication. */
 function registerIpcHandlers(): void {
   ipcMain.handle("app:getPlatform", () => process.platform);
@@ -280,4 +282,46 @@ function registerIpcHandlers(): void {
       }
     }
   );
+
+  ipcMain.handle("app:deleteFile", async (_event, filePath: string) => {
+    if (typeof filePath !== "string" || !filePath.trim()) return false;
+    try {
+      await shell.trashItem(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle("app:renameFile", async (_event, oldPath: string, newPath: string) => {
+    if (typeof oldPath !== "string" || !oldPath.trim() || typeof newPath !== "string" || !newPath.trim()) return false;
+    try {
+      await fs.promises.rename(oldPath, newPath);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.on("app:watchDirectory", (event, dirPath: string) => {
+    if (currentWatcher) {
+      currentWatcher.close();
+      currentWatcher = null;
+    }
+    if (typeof dirPath !== "string" || !dirPath.trim()) return;
+    try {
+      currentWatcher = fs.watch(dirPath, (_eventType, _filename) => {
+        event.sender.send("directory-changed", dirPath);
+      });
+    } catch {
+      // ignore
+    }
+  });
+
+  ipcMain.on("app:unwatchDirectory", () => {
+    if (currentWatcher) {
+      currentWatcher.close();
+      currentWatcher = null;
+    }
+  });
 }

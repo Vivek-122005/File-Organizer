@@ -1,7 +1,6 @@
 import fs from "fs";
 import path from "path";
 
-/** Extension → category label. Lowercase keys for lookup. */
 const EXTENSION_CATEGORY: Record<string, string> = {
   jpg: "Image",
   jpeg: "Image",
@@ -9,11 +8,19 @@ const EXTENSION_CATEGORY: Record<string, string> = {
   gif: "Image",
   webp: "Image",
   svg: "Image",
-  pdf: "Doc",
-  doc: "Doc",
-  docx: "Doc",
-  txt: "Doc",
-  md: "Doc",
+  pdf: "PDF",
+  doc: "Document",
+  docx: "Document",
+  txt: "Document",
+  md: "Document",
+  rtf: "Document",
+  csv: "Spreadsheet",
+  xls: "Spreadsheet",
+  xlsx: "Spreadsheet",
+  numbers: "Spreadsheet",
+  ppt: "Presentation",
+  pptx: "Presentation",
+  key: "Presentation",
   py: "Code",
   js: "Code",
   ts: "Code",
@@ -26,12 +33,17 @@ const EXTENSION_CATEGORY: Record<string, string> = {
   wav: "Audio",
   mp4: "Video",
   mov: "Video",
+  mkv: "Video",
+  webm: "Video",
   zip: "Archive",
   tar: "Archive",
   gz: "Archive",
+  rar: "Archive",
+  "7z": "Archive",
 };
 
 export interface ScannedFile {
+  name: string;
   filePath: string;
   relativePath: string;
   extension: string;
@@ -44,7 +56,11 @@ export interface ScanResult {
   totalCount: number;
 }
 
-function getCategory(ext: string): string {
+function getCategory(ext: string, name: string): string {
+  const lowerName = name.toLowerCase();
+  if (lowerName.includes("screenshot") || lowerName.includes("screen shot")) {
+    return "Screenshot";
+  }
   return EXTENSION_CATEGORY[ext.toLowerCase()] ?? "Other";
 }
 
@@ -84,10 +100,11 @@ export async function scanDirectory(
       if (!entry.isFile()) continue;
 
       const ext = path.extname(entry.name).slice(1) || "";
-      const category = getCategory(ext);
+      const category = getCategory(ext, entry.name);
       const relativePath = path.relative(normalizedRoot, fullPath);
 
       files.push({
+        name: entry.name,
         filePath: fullPath,
         relativePath,
         extension: ext ? `.${ext}` : "",

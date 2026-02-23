@@ -27,6 +27,19 @@ const electronAPI = {
     ipcRenderer.invoke("app:openPath", filePath),
   readFilePreview: (filePath: string, maxBytes?: number) =>
     ipcRenderer.invoke("app:readFilePreview", filePath, maxBytes ?? 8192),
+
+  deleteFile: (filePath: string): Promise<boolean> =>
+    ipcRenderer.invoke("app:deleteFile", filePath),
+  renameFile: (oldPath: string, newPath: string): Promise<boolean> =>
+    ipcRenderer.invoke("app:renameFile", oldPath, newPath),
+  watchDirectory: (dirPath: string) =>
+    ipcRenderer.send("app:watchDirectory", dirPath),
+  unwatchDirectory: () => ipcRenderer.send("app:unwatchDirectory"),
+  onDirectoryChanged: (callback: (dirPath: string) => void) => {
+    const handler = (_event: any, dirPath: string) => callback(dirPath);
+    ipcRenderer.on("directory-changed", handler);
+    return () => ipcRenderer.off("directory-changed", handler);
+  },
 };
 
 contextBridge.exposeInMainWorld("electron", electronAPI);
