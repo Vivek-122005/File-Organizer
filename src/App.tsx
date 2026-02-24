@@ -10,13 +10,30 @@ import { Dashboard } from "./components/Dashboard";
 import { BinView } from "./components/BinView";
 import { useFileStore } from "./stores/useFileStore";
 import type { DiskVizNode } from "./types/diskViz";
-import { HelpCircle, Loader2, X } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Gauge,
+  HelpCircle,
+  ImageIcon,
+  Loader2,
+  X,
+} from "lucide-react";
 
 const GLASS =
   "rounded-2xl border border-border-subtle bg-secondary/80 backdrop-blur-glass";
 
 function App() {
-  const { currentPath, loadFavorites, favorites, navigateTo } = useFileStore();
+  const {
+    currentPath,
+    loadFavorites,
+    favorites,
+    navigateTo,
+    performanceMode,
+    setPerformanceMode,
+  } = useFileStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"explorer" | "dashboard">("explorer");
   const [showBin, setShowBin] = useState(false);
@@ -26,6 +43,7 @@ function App() {
   const [vizLoading, setVizLoading] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const [perfPanelCollapsed, setPerfPanelCollapsed] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const [tourTargetRect, setTourTargetRect] = useState<DOMRect | null>(null);
   const helpButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -153,6 +171,23 @@ function App() {
     checked: boolean;
     hasAccess: boolean;
   }>({ checked: false, hasAccess: false });
+  const [perfStats, setPerfStats] = useState<{
+    vizMs: number | null;
+    dashboardMs: number | null;
+    vizRunning: boolean;
+    dashboardRunning: boolean;
+    thumbnailLoaded: number;
+    thumbnailTotal: number;
+    thumbnailRunning: boolean;
+  }>({
+    vizMs: null,
+    dashboardMs: null,
+    vizRunning: false,
+    dashboardRunning: false,
+    thumbnailLoaded: 0,
+    thumbnailTotal: 0,
+    thumbnailRunning: false,
+  });
 
   useEffect(() => {
     loadFavorites();
@@ -178,39 +213,133 @@ function App() {
 
   useEffect(() => {
     if (!currentPath || !window.electron?.scanDirectoryForViz) return;
-    setVizLoading(true);
-    setVizData(null);
-    window.electron
-      .scanDirectoryForViz(currentPath, 2)
-      .then(setVizData)
-      .catch(() => setVizData(null))
-      .finally(() => setVizLoading(false));
+    let cancelled = false;
+    const delayMs = performanceMode ? 320 : 80;
+    const scanDepth = performanceMode ? 1 : 2;
 
-    if (activeTab === "dashboard" && window.electron.scanDirectory) {
-      setScanLoading(true);
+    const timer = window.setTimeout(() => {
+      const vizStart = performance.now();
+      setVizLoading(true);
+      setVizData(null);
+      setPerfStats((s) => ({ ...s, vizRunning: true }));
       window.electron
-        .scanDirectory(currentPath, 2) // shallow scan by default for Dashboard
-        .then(setScanResult)
-        .catch(() => setScanResult(null))
-        .finally(() => setScanLoading(false));
-    }
-  }, [currentPath, activeTab]);
+        .scanDirectoryForViz(currentPath, scanDepth)
+        .then((data) => {
+          if (!cancelled) setVizData(data);
+        })
+        .catch(() => {
+          if (!cancelled) setVizData(null);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setVizLoading(false);
+          setPerfStats((s) => ({
+            ...s,
+            vizRunning: false,
+            vizMs: Math.round(performance.now() - vizStart),
+          }));
+        });
+
+      if (activeTab === "dashboard" && window.electron?.scanDirectory) {
+        const dashboardStart = performance.now();
+        setScanLoading(true);
+        setPerfStats((s) => ({ ...s, dashboardRunning: true }));
+        window.electron
+          .scanDirectory(currentPath, scanDepth)
+          .then((result) => {
+            if (!cancelled) setScanResult(result);
+          })
+          .catch(() => {
+            if (!cancelled) setScanResult(null);
+          })
+          .finally(() => {
+            if (cancelled) return;
+            setScanLoading(false);
+            setPerfStats((s) => ({
+              ...s,
+              dashboardRunning: false,
+              dashboardMs: Math.round(performance.now() - dashboardStart),
+            }));
+          });
+      }
+    }, delayMs);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [currentPath, activeTab, performanceMode]);
 
   const handleDeepScan = (path: string) => {
-    if (!window.electron?.scanDirectoryForVizDeep) return;
+    if (!window.electron?.scanDirectoryForViz) return;
+    const api = window.electron;
+    const vizStart = performance.now();
     setVizLoading(true);
     setVizData(null);
-    window.electron
-      .scanDirectoryForVizDeep(path)
+    setPerfStats((s) => ({ ...s, vizRunning: true }));
+    const task = performanceMode
+      ? api.scanDirectoryForViz(path, 3)
+      : api.scanDirectoryForVizDeep
+        ? api.scanDirectoryForVizDeep(path)
+        : api.scanDirectoryForViz(path, 6);
+    task
       .then(setVizData)
       .catch(() => setVizData(null))
-      .finally(() => setVizLoading(false));
+      .finally(() => {
+        setVizLoading(false);
+        setPerfStats((s) => ({
+          ...s,
+          vizRunning: false,
+          vizMs: Math.round(performance.now() - vizStart),
+        }));
+      });
+  };
+
+  const handleThumbnailProgress = (progress: {
+    loaded: number;
+    total: number;
+    running: boolean;
+  }) => {
+    setPerfStats((s) => ({
+      ...s,
+      thumbnailLoaded: progress.loaded,
+      thumbnailTotal: progress.total,
+      thumbnailRunning: progress.running,
+    }));
   };
 
   const handleGrantedAccess = (path: string) => {
     navigateTo(path);
     setAccessState((s) => ({ ...s, hasAccess: true }));
   };
+
+  const thumbnailLoaded = Math.min(
+    perfStats.thumbnailLoaded,
+    perfStats.thumbnailTotal
+  );
+  const thumbnailPercent =
+    perfStats.thumbnailTotal > 0
+      ? Math.round((thumbnailLoaded / perfStats.thumbnailTotal) * 100)
+      : 0;
+  const loadLevel: "normal" | "medium" | "high" = (() => {
+    if (
+      perfStats.vizRunning ||
+      perfStats.dashboardRunning ||
+      (perfStats.thumbnailRunning && perfStats.thumbnailTotal > 180) ||
+      (perfStats.vizMs ?? 0) > 1400 ||
+      (perfStats.dashboardMs ?? 0) > 1700
+    ) {
+      return "high";
+    }
+    if (
+      (perfStats.vizMs ?? 0) > 850 ||
+      (perfStats.dashboardMs ?? 0) > 1100 ||
+      (perfStats.thumbnailRunning && perfStats.thumbnailTotal > 60)
+    ) {
+      return "medium";
+    }
+    return "normal";
+  })();
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -300,7 +429,12 @@ function App() {
         </div>
       ) : (
         <div className="flex flex-col gap-4 p-6 h-full">
-          <ControlBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+          <ControlBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            performanceMode={performanceMode}
+            onTogglePerformanceMode={() => setPerformanceMode(!performanceMode)}
+          />
 
           {/* Navigation Tabs */}
           <div
@@ -322,12 +456,149 @@ function App() {
               Auto Organize Summary
             </button>
           </div>
+          <div className="rounded-2xl border border-border-subtle bg-secondary/70 p-3 backdrop-blur-glass">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
+                    loadLevel === "high"
+                      ? "border-red-400/40 bg-red-500/20 text-red-200"
+                      : loadLevel === "medium"
+                        ? "border-amber-400/40 bg-amber-500/20 text-amber-200"
+                        : "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+                  }`}
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  Load {loadLevel}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPerfPanelCollapsed((v) => !v)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 text-white/70 transition hover:bg-white/10 hover:text-white"
+                >
+                  {perfPanelCollapsed ? (
+                    <>
+                      <ChevronDown className="h-3.5 w-3.5" />
+                      Expand
+                    </>
+                  ) : (
+                    <>
+                      <ChevronUp className="h-3.5 w-3.5" />
+                      Minimize
+                    </>
+                  )}
+                </button>
+              </div>
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
+                  performanceMode
+                    ? "border-cyan-300/40 bg-cyan-500/15 text-cyan-100"
+                    : "border-white/10 bg-white/5 text-white/70"
+                }`}
+              >
+                <Gauge className="h-3 w-3" />
+                Performance Mode {performanceMode ? "On" : "Off"}
+              </span>
+              <span className="text-white/45">
+                {performanceMode
+                  ? "Balanced for smoother navigation on large folders."
+                  : "Full-detail scanning and aggressive thumbnails."}
+              </span>
+            </div>
+
+            {!perfPanelCollapsed && (
+            <div className="grid gap-2 text-[11px] text-white/70 sm:grid-cols-3">
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1">
+                    <Activity className="h-3 w-3 text-cyan-300" />
+                    Viz scan
+                  </span>
+                  <span className="text-white/60">
+                    {perfStats.vizRunning
+                      ? "running…"
+                      : perfStats.vizMs != null
+                        ? `${perfStats.vizMs} ms`
+                        : "—"}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/10">
+                  <div
+                    className={`h-1.5 rounded-full transition-all ${
+                      perfStats.vizRunning ? "w-3/4 animate-pulse bg-cyan-400" : "w-full bg-cyan-400/40"
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1">
+                    <Activity className="h-3 w-3 text-blue-300" />
+                    Summary scan
+                  </span>
+                  <span className="text-white/60">
+                    {activeTab !== "dashboard"
+                      ? "inactive"
+                      : perfStats.dashboardRunning
+                        ? "running…"
+                        : perfStats.dashboardMs != null
+                          ? `${perfStats.dashboardMs} ms`
+                          : "—"}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/10">
+                  <div
+                    className={`h-1.5 rounded-full transition-all ${
+                      activeTab === "dashboard" && perfStats.dashboardRunning
+                        ? "w-3/4 animate-pulse bg-blue-400"
+                        : "w-full bg-blue-400/30"
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1">
+                    <ImageIcon className="h-3 w-3 text-violet-300" />
+                    Thumbnails
+                  </span>
+                  <span className="text-white/60">
+                    {perfStats.thumbnailTotal > 0
+                      ? `${thumbnailLoaded}/${perfStats.thumbnailTotal}`
+                      : "—"}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/10">
+                  <div
+                    className={`h-1.5 rounded-full transition-all ${
+                      perfStats.thumbnailRunning
+                        ? "bg-violet-400"
+                        : "bg-violet-400/40"
+                    }`}
+                    style={{
+                      width:
+                        perfStats.thumbnailTotal > 0
+                          ? `${Math.max(6, thumbnailPercent)}%`
+                          : "0%",
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+            )}
+          </div>
 
           <div className="flex min-h-0 flex-1 gap-4">
             {activeTab === "explorer" ? (
               <>
                 <div className="flex min-w-0 flex-[7] flex-col overflow-auto">
-                  <ExplorerView searchQuery={searchQuery} />
+                  <ExplorerView
+                    searchQuery={searchQuery}
+                    performanceMode={performanceMode}
+                    onThumbnailProgress={handleThumbnailProgress}
+                  />
                 </div>
                 <div className="flex min-w-0 flex-[3] flex-col overflow-hidden">
                   <div className={`flex min-h-[360px] flex-col ${GLASS} p-4`}>

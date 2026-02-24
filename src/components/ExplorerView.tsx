@@ -65,6 +65,12 @@ function getFileIcon(name: string): React.ComponentType<{ className?: string }> 
 
 interface ExplorerViewProps {
   searchQuery: string;
+  performanceMode?: boolean;
+  onThumbnailProgress?: (progress: {
+    loaded: number;
+    total: number;
+    running: boolean;
+  }) => void;
 }
 
 interface ContextMenuState {
@@ -78,7 +84,11 @@ interface ContextMenuState {
  * Finder-style grid: folders and files. Single click = select (glow).
  * Double click folder = navigate; double click file = open with system app.
  */
-export function ExplorerView({ searchQuery }: ExplorerViewProps) {
+export function ExplorerView({
+  searchQuery,
+  performanceMode = false,
+  onThumbnailProgress,
+}: ExplorerViewProps) {
   const {
     currentPath,
     navigateTo,
@@ -133,7 +143,8 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
   useEffect(() => {
     setThumbnailByPath({});
     requestedThumbnailPaths.current.clear();
-  }, [currentPath]);
+    onThumbnailProgress?.({ loaded: 0, total: 0, running: false });
+  }, [currentPath, onThumbnailProgress]);
 
   const handleDelete = async (entry: DirEntry) => {
     const ok = await window.electron?.deleteFile?.(entry.path);
@@ -166,42 +177,105 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
     [filtered, sortConfig]
   );
 
+  const isPreviewable = (name: string) => {
+    const ext = name.split(".").pop()?.toLowerCase() ?? "";
+    return IMAGE_EXTENSIONS.includes(ext);
+  };
+
+  const canCreateThumbnail = (entry: DirEntry) => {
+    if (entry.isDirectory) return false;
+    if (!performanceMode) return true;
+    // In Performance Mode, restrict expensive thumbnail generation to media-like files.
+    return isPreviewable(entry.name);
+  };
+
+  const thumbnailEligibleTotal = sorted.filter(canCreateThumbnail).length;
+
   useEffect(() => {
     const api = window.electron?.getFileThumbnail;
-    if (!api || sorted.length === 0) return;
+    if (!api || sorted.length === 0) {
+      onThumbnailProgress?.({ loaded: 0, total: 0, running: false });
+      return;
+    }
 
     const pending = sorted.filter(
-      (entry) => !entry.isDirectory && !requestedThumbnailPaths.current.has(entry.path)
+      (entry) =>
+        canCreateThumbnail(entry) &&
+        !requestedThumbnailPaths.current.has(entry.path)
     );
-    if (pending.length === 0) return;
+    if (pending.length === 0) {
+      onThumbnailProgress?.({
+        loaded: Math.min(requestedThumbnailPaths.current.size, thumbnailEligibleTotal),
+        total: thumbnailEligibleTotal,
+        running: false,
+      });
+      return;
+    }
 
-    // Limit to keep scrolling responsive in very large folders.
-    const queue = pending.slice(0, 250);
+    const queueLimit = performanceMode ? 90 : 250;
+    const queue = pending.slice(0, queueLimit);
     for (const item of queue) requestedThumbnailPaths.current.add(item.path);
 
     let cancelled = false;
-    const workers = Math.min(6, queue.length);
+    let completed = 0;
+    const workers = Math.min(performanceMode ? 2 : 6, queue.length);
+    const thumbSize = performanceMode ? 72 : 96;
+
+    onThumbnailProgress?.({
+      loaded: Math.min(
+        requestedThumbnailPaths.current.size - queue.length,
+        thumbnailEligibleTotal
+      ),
+      total: thumbnailEligibleTotal,
+      running: true,
+    });
 
     const runWorker = async () => {
       while (!cancelled && queue.length > 0) {
         const entry = queue.shift();
         if (!entry) return;
-        const thumbnail = await api(entry.path, 96).catch(() => null);
+        const thumbnail = await api(entry.path, thumbSize).catch(() => null);
         if (cancelled) return;
         setThumbnailByPath((prev) => {
           if (prev[entry.path] === thumbnail) return prev;
           return { ...prev, [entry.path]: thumbnail };
         });
+        completed += 1;
+        onThumbnailProgress?.({
+          loaded: Math.min(
+            requestedThumbnailPaths.current.size - (queue.length - completed),
+            thumbnailEligibleTotal
+          ),
+          total: thumbnailEligibleTotal,
+          running: queue.length - completed > 0,
+        });
       }
     };
 
     const tasks = Array.from({ length: workers }, () => runWorker());
-    void Promise.all(tasks);
+    void Promise.all(tasks).finally(() => {
+      if (cancelled) return;
+      onThumbnailProgress?.({
+        loaded: Math.min(requestedThumbnailPaths.current.size, thumbnailEligibleTotal),
+        total: thumbnailEligibleTotal,
+        running: false,
+      });
+    });
 
     return () => {
       cancelled = true;
+      onThumbnailProgress?.({
+        loaded: Math.min(requestedThumbnailPaths.current.size, thumbnailEligibleTotal),
+        total: thumbnailEligibleTotal,
+        running: false,
+      });
     };
-  }, [sorted]);
+  }, [
+    sorted,
+    performanceMode,
+    onThumbnailProgress,
+    thumbnailEligibleTotal,
+  ]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -263,11 +337,6 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
       </div>
     );
   }
-
-  const isPreviewable = (name: string) => {
-    const ext = name.split(".").pop()?.toLowerCase() ?? "";
-    return IMAGE_EXTENSIONS.includes(ext);
-  };
 
   const previewSrcForEntry = (entry: DirEntry): string | null => {
     if (entry.isDirectory) return null;

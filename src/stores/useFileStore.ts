@@ -32,6 +32,7 @@ interface FileStore {
   sidebarFavorites: SidebarFavorite[];
   viewMode: ViewMode;
   sortConfig: SortConfig;
+  performanceMode: boolean;
   selectedEntry: DirEntry | null;
   setCurrentPath: (path: string | null) => void;
   setFavorites: (items: FavoriteItem[]) => void;
@@ -43,6 +44,7 @@ interface FileStore {
   goUp: () => void;
   setViewMode: (mode: ViewMode) => void;
   setSortConfig: (config: SortConfig) => void;
+  setPerformanceMode: (enabled: boolean) => void;
   setSelectedEntry: (entry: DirEntry | null) => void;
   addFavorite: (path: string) => void;
   removeFavorite: (id: string) => void;
@@ -60,6 +62,7 @@ export const useFileStore = create<FileStore>()(
       sidebarFavorites: [],
       viewMode: "grid",
       sortConfig: { by: "name", order: "asc" },
+      performanceMode: false,
       selectedEntry: null,
 
       setCurrentPath: (path) => set({ currentPath: path }),
@@ -129,6 +132,7 @@ export const useFileStore = create<FileStore>()(
       setViewMode: (mode) => set({ viewMode: mode }),
 
       setSortConfig: (config) => set({ sortConfig: config }),
+      setPerformanceMode: (enabled) => set({ performanceMode: enabled }),
 
       setSelectedEntry: (entry) => set({ selectedEntry: entry }),
 
@@ -177,6 +181,7 @@ export const useFileStore = create<FileStore>()(
         sidebarFavorites: state.sidebarFavorites,
         viewMode: state.viewMode,
         sortConfig: state.sortConfig,
+        performanceMode: state.performanceMode,
       }),
     }
   )
