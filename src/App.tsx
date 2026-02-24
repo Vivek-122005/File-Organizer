@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScanResult } from "./types/fileScanner";
 import { Layout } from "./components/Layout";
 import { Sidebar } from "./components/Sidebar";
@@ -43,6 +43,7 @@ function App() {
   const [vizLoading, setVizLoading] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const [permissionGateOpen, setPermissionGateOpen] = useState(true);
   const [perfPanelCollapsed, setPerfPanelCollapsed] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const [tourTargetRect, setTourTargetRect] = useState<DOMRect | null>(null);
@@ -295,18 +296,26 @@ function App() {
       });
   };
 
-  const handleThumbnailProgress = (progress: {
-    loaded: number;
-    total: number;
-    running: boolean;
-  }) => {
-    setPerfStats((s) => ({
-      ...s,
-      thumbnailLoaded: progress.loaded,
-      thumbnailTotal: progress.total,
-      thumbnailRunning: progress.running,
-    }));
-  };
+  const handleThumbnailProgress = useCallback(
+    (progress: { loaded: number; total: number; running: boolean }) => {
+      setPerfStats((s) => {
+        if (
+          s.thumbnailLoaded === progress.loaded &&
+          s.thumbnailTotal === progress.total &&
+          s.thumbnailRunning === progress.running
+        ) {
+          return s;
+        }
+        return {
+          ...s,
+          thumbnailLoaded: progress.loaded,
+          thumbnailTotal: progress.total,
+          thumbnailRunning: progress.running,
+        };
+      });
+    },
+    []
+  );
 
   const handleGrantedAccess = (path: string) => {
     navigateTo(path);
@@ -413,10 +422,18 @@ function App() {
     );
   }
 
-  if (accessState.checked && !accessState.hasAccess) {
+  if (permissionGateOpen || (accessState.checked && !accessState.hasAccess)) {
     return (
       <Layout sidebarContent={null}>
-        <SetupScreen onGranted={handleGrantedAccess} />
+        <SetupScreen
+          onGranted={(path) => {
+            handleGrantedAccess(path);
+            setPermissionGateOpen(false);
+          }}
+          onContinue={() => setPermissionGateOpen(false)}
+          canContinue={accessState.checked && accessState.hasAccess}
+          checkingAccess={!accessState.checked}
+        />
       </Layout>
     );
   }

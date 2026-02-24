@@ -173,7 +173,8 @@ function createWindow(): void {
     win.loadURL("http://localhost:5173");
     win.webContents.openDevTools({ mode: "detach" });
   } else {
-    win.loadFile(path.join(__dirname, "../index.html"));
+    // Load Vite-built output (dist/index.html), not the root index.html
+    win.loadFile(path.join(__dirname, "../dist/index.html"));
   }
 }
 
@@ -358,6 +359,25 @@ function registerIpcHandlers(): void {
       : await dialog.showOpenDialog(options);
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
+  });
+
+  ipcMain.handle("app:openFullDiskAccessSettings", async () => {
+    if (process.platform !== "darwin") return false;
+    const directUrl =
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles";
+    const fallbackUrl =
+      "x-apple.systempreferences:com.apple.preference.security?Privacy";
+    try {
+      await shell.openExternal(directUrl);
+      return true;
+    } catch {
+      try {
+        await shell.openExternal(fallbackUrl);
+        return true;
+      } catch {
+        return false;
+      }
+    }
   });
 
   ipcMain.handle("app:getSystemPaths", (): SystemPaths => ({

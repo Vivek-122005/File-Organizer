@@ -11,6 +11,8 @@ const electronAPI = {
   checkAccess: (path: string) => ipcRenderer.invoke("app:checkAccess", path),
   askForPermission: (): Promise<string | null> =>
     ipcRenderer.invoke("app:askForPermission"),
+  openFullDiskAccessSettings: (): Promise<boolean> =>
+    ipcRenderer.invoke("app:openFullDiskAccessSettings"),
   selectDirectory: (): Promise<string | null> =>
     ipcRenderer.invoke("app:selectDirectory"),
   scanDirectory: (dirPath: string, depth?: number) =>

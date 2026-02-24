@@ -32,6 +32,7 @@ declare global {
       getSystemPaths: () => Promise<SystemPaths>;
       checkAccess: (path: string) => Promise<boolean>;
       askForPermission: () => Promise<string | null>;
+      openFullDiskAccessSettings: () => Promise<boolean>;
       selectDirectory: () => Promise<string | null>;
       scanDirectory: (dirPath: string, depth?: number) => Promise<ScanResult>;
       scanDirectoryForViz: (dirPath: string, depth?: number) => Promise<DiskVizNode>;
