@@ -24,6 +24,21 @@
     "react-syntax-highlighter": "^16.1.0",
     "zustand": "^5.0.1"
   },
+  "build": {
+    "appId": "com.nexus.fileorganizer",
+    "productName": "Nexus",
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "target": ["dmg", "zip"]
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ]
+  },
   "devDependencies": {
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",
