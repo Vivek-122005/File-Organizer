@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
   Folder,
   FileImage,
@@ -15,6 +15,7 @@ import {
 import { useFileStore } from "../stores/useFileStore";
 import type { DirEntry } from "../types/dirEntry";
 import { sortFiles } from "../utils/sortFiles";
+import { toMediaUrl } from "../utils/mediaUrl";
 import type { SortConfig } from "../stores/useFileStore";
 import { QuickLook } from "./QuickLook";
 
@@ -27,9 +28,26 @@ const FILE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = 
   archive: FileArchive,
 };
 
+const IMAGE_EXTENSIONS = [
+  "jpg",
+  "jpeg",
+  "png",
+  "gif",
+  "webp",
+  "svg",
+  "bmp",
+  "tif",
+  "tiff",
+  "ico",
+  "heic",
+  "heif",
+  "avif",
+  "jfif",
+];
+
 function getFileIcon(name: string): React.ComponentType<{ className?: string }> {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  const image = ["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext);
+  const image = IMAGE_EXTENSIONS.includes(ext);
   const code = ["js", "ts", "tsx", "jsx", "py", "html", "css", "json"].includes(ext);
   const music = ["mp3", "wav", "m4a", "flac"].includes(ext);
   const video = ["mp4", "mov", "webm", "avi"].includes(ext);
@@ -84,6 +102,8 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
   const [quickLookOpen, setQuickLookOpen] = useState(false);
   const [renamingEntry, setRenamingEntry] = useState<DirEntry | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [thumbnailByPath, setThumbnailByPath] = useState<Record<string, string | null>>({});
+  const requestedThumbnailPaths = useRef<Set<string>>(new Set());
 
   const fetchDir = () => {
     if (!currentPath || !window.electron?.listDirectory) return;
@@ -107,6 +127,11 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
       window.electron?.unwatchDirectory?.();
       unsub?.();
     };
+  }, [currentPath]);
+
+  useEffect(() => {
+    setThumbnailByPath({});
+    requestedThumbnailPaths.current.clear();
   }, [currentPath]);
 
   const handleDelete = async (entry: DirEntry) => {
@@ -139,6 +164,43 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
     () => sortFiles(filtered, sortConfig as SortConfig),
     [filtered, sortConfig]
   );
+
+  useEffect(() => {
+    const api = window.electron?.getFileThumbnail;
+    if (!api || sorted.length === 0) return;
+
+    const pending = sorted.filter(
+      (entry) => !entry.isDirectory && !requestedThumbnailPaths.current.has(entry.path)
+    );
+    if (pending.length === 0) return;
+
+    // Limit to keep scrolling responsive in very large folders.
+    const queue = pending.slice(0, 250);
+    for (const item of queue) requestedThumbnailPaths.current.add(item.path);
+
+    let cancelled = false;
+    const workers = Math.min(6, queue.length);
+
+    const runWorker = async () => {
+      while (!cancelled && queue.length > 0) {
+        const entry = queue.shift();
+        if (!entry) return;
+        const thumbnail = await api(entry.path, 96).catch(() => null);
+        if (cancelled) return;
+        setThumbnailByPath((prev) => {
+          if (prev[entry.path] === thumbnail) return prev;
+          return { ...prev, [entry.path]: thumbnail };
+        });
+      }
+    };
+
+    const tasks = Array.from({ length: workers }, () => runWorker());
+    void Promise.all(tasks);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sorted]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -201,16 +263,25 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
     );
   }
 
-  const isImageFile = (name: string) =>
-    ["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(
-      name.split(".").pop()?.toLowerCase() ?? ""
-    );
+  const isPreviewable = (name: string) => {
+    const ext = name.split(".").pop()?.toLowerCase() ?? "";
+    return IMAGE_EXTENSIONS.includes(ext);
+  };
+
+  const previewSrcForEntry = (entry: DirEntry): string | null => {
+    if (entry.isDirectory) return null;
+    const thumb = thumbnailByPath[entry.path];
+    if (thumb) return thumb;
+    if (isPreviewable(entry.name)) return toMediaUrl(entry.path);
+    return null;
+  };
 
   const renderGrid = () => (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
       {sorted.map((entry) => {
         const isSelected = selectedEntry?.path === entry.path;
         const Icon = entry.isDirectory ? Folder : getFileIcon(entry.name);
+        const previewSrc = previewSrcForEntry(entry);
         return (
           <button
             key={entry.path}
@@ -231,20 +302,22 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
               : "bg-secondary/60 backdrop-blur-glass hover:bg-white/5"
               } ${isSelected ? "ring-2 ring-blue-500/50 shadow-sm" : ""}`}
           >
-            <div
-              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${entry.isDirectory ? "bg-amber-500/20" : "bg-white/5"
-                }`}
-            >
-              {isImageFile(entry.name) && !entry.isDirectory ? (
+            {previewSrc ? (
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-black/20">
                 <img
-                  src={`media://${encodeURIComponent(entry.path)}`}
+                  src={previewSrc}
                   alt={entry.name}
-                  className="h-12 w-12 rounded-xl object-cover"
+                  loading="lazy"
+                  className="h-full w-full object-cover"
                 />
-              ) : (
+              </div>
+            ) : (
+              <div
+                className={"flex h-12 w-12 shrink-0 items-center justify-center rounded-xl " + (entry.isDirectory ? "bg-amber-500/20" : "bg-white/5")}
+              >
                 <Icon className="h-6 w-6 text-white/90" />
-              )}
-            </div>
+              </div>
+            )}
             {renamingEntry?.path === entry.path ? (
               <input
                 autoFocus
@@ -284,6 +357,7 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
           {sorted.map((entry, idx) => {
             const isSelected = selectedEntry?.path === entry.path;
             const Icon = entry.isDirectory ? Folder : getFileIcon(entry.name);
+            const previewSrc = previewSrcForEntry(entry);
             const typeLabel = entry.isDirectory
               ? "Folder"
               : getFileIcon(entry.name) === FileImage
@@ -319,7 +393,18 @@ export function ExplorerView({ searchQuery }: ExplorerViewProps) {
               >
                 <td className="max-w-[260px] px-4 py-2">
                   <div className="flex items-center gap-2">
-                    <Icon className="h-4 w-4 shrink-0 text-white/80" />
+                    {previewSrc ? (
+                      <div className="h-7 w-7 shrink-0 overflow-hidden rounded-md bg-black/20">
+                        <img
+                          src={previewSrc}
+                          alt={entry.name}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <Icon className="h-4 w-4 shrink-0 text-white/80" />
+                    )}
                     {renamingEntry?.path === entry.path ? (
                       <input
                         autoFocus
