@@ -12,6 +12,15 @@ export interface SystemPaths {
   music: string;
 }
 
+export interface TrashItem {
+  id: string;
+  name: string;
+  originalPath: string;
+  trashedAt: number;
+  size: number;
+  isDirectory: boolean;
+}
+
 export type { DirEntry };
 
 declare global {
@@ -30,7 +39,13 @@ declare global {
       getParentPath: (dirPath: string) => Promise<string | null>;
       openPath: (filePath: string) => Promise<{ error: string }>;
       readFilePreview: (filePath: string, maxBytes?: number) => Promise<string>;
+      getFileThumbnail: (filePath: string, size?: number) => Promise<string | null>;
       deleteFile: (filePath: string) => Promise<boolean>;
+      moveToTrash: (filePath: string) => Promise<boolean>;
+      listTrashItems: () => Promise<TrashItem[]>;
+      restoreFromTrash: (id: string) => Promise<boolean>;
+      permanentlyDelete: (id: string) => Promise<boolean>;
+      emptyTrash: () => Promise<boolean>;
       renameFile: (oldPath: string, newPath: string) => Promise<boolean>;
       watchDirectory: (dirPath: string) => void;
       unwatchDirectory: () => void;

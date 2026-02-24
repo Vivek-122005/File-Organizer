@@ -27,9 +27,21 @@ const electronAPI = {
     ipcRenderer.invoke("app:openPath", filePath),
   readFilePreview: (filePath: string, maxBytes?: number) =>
     ipcRenderer.invoke("app:readFilePreview", filePath, maxBytes ?? 8192),
+  getFileThumbnail: (filePath: string, size?: number): Promise<string | null> =>
+    ipcRenderer.invoke("app:getFileThumbnail", filePath, size ?? 96),
 
   deleteFile: (filePath: string): Promise<boolean> =>
     ipcRenderer.invoke("app:deleteFile", filePath),
+  moveToTrash: (filePath: string): Promise<boolean> =>
+    ipcRenderer.invoke("app:moveToTrash", filePath),
+  listTrashItems: (): Promise<any[]> =>
+    ipcRenderer.invoke("app:listTrashItems"),
+  restoreFromTrash: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke("app:restoreFromTrash", id),
+  permanentlyDelete: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke("app:permanentlyDelete", id),
+  emptyTrash: (): Promise<boolean> =>
+    ipcRenderer.invoke("app:emptyTrash"),
   renameFile: (oldPath: string, newPath: string): Promise<boolean> =>
     ipcRenderer.invoke("app:renameFile", oldPath, newPath),
   watchDirectory: (dirPath: string) =>

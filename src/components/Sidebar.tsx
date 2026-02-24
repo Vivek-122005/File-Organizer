@@ -8,6 +8,7 @@ import {
   FolderGit2,
   Book,
   HardDrive,
+  Trash2,
 } from "lucide-react";
 import {
   useFileStore,
@@ -27,6 +28,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useEffect, useState } from "react";
 
 const FAVORITE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Home,
@@ -73,8 +75,6 @@ function SidebarFavoriteRow({ item }: { item: SidebarFavorite }) {
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    // Simple inline context actions for now; could be replaced with a menu.
-    // For mid-eval: just support Remove.
     removeFavorite(item.id);
   };
 
@@ -84,11 +84,10 @@ function SidebarFavoriteRow({ item }: { item: SidebarFavorite }) {
       type="button"
       onClick={() => navigateTo(item.path)}
       onContextMenu={handleContextMenu}
-      className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs [-webkit-app-region:no-drag] ${
-        isActive
+      className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs [-webkit-app-region:no-drag] ${isActive
           ? "rounded-xl bg-blue-500/80 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.4)]"
           : "rounded-xl text-white/80 hover:bg-white/5"
-      } ${isDragging ? "opacity-80" : ""}`}
+        } ${isDragging ? "opacity-80" : ""}`}
       style={style}
       {...attributes}
       {...listeners}
@@ -99,11 +98,16 @@ function SidebarFavoriteRow({ item }: { item: SidebarFavorite }) {
   );
 }
 
+interface SidebarProps {
+  activeBin?: boolean;
+  onBinClick?: () => void;
+}
+
 /**
  * Finder-style sidebar with customizable Favorites (drag-reorder),
- * plus static Locations.
+ * plus static Locations and a Bin entry.
  */
-export function Sidebar() {
+export function Sidebar({ activeBin, onBinClick }: SidebarProps) {
   const {
     favorites,
     sidebarFavorites,
@@ -111,6 +115,14 @@ export function Sidebar() {
     navigateTo,
     reorderFavorites,
   } = useFileStore();
+
+  const [binCount, setBinCount] = useState(0);
+
+  useEffect(() => {
+    window.electron?.listTrashItems?.().then((items) => {
+      setBinCount(items?.length ?? 0);
+    });
+  }, [activeBin]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -127,6 +139,10 @@ export function Sidebar() {
     const newIndex = sidebarFavorites.findIndex((f) => f.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
     reorderFavorites(oldIndex, newIndex);
+  };
+
+  const handleLocationClick = (itemPath: string) => {
+    navigateTo(itemPath);
   };
 
   return (
@@ -165,24 +181,49 @@ export function Sidebar() {
           </div>
           <div className="flex flex-col gap-0.5">
             {favorites.map((item) => {
-              const isActive = currentPath === item.path;
+              const isActive = !activeBin && currentPath === item.path;
               const Icon = FAVORITE_ICONS[item.name] ?? Folder;
               return (
                 <button
                   key={item.path}
                   type="button"
-                  onClick={() => navigateTo(item.path)}
-                  className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs [-webkit-app-region:no-drag] ${
-                    isActive
+                  onClick={() => handleLocationClick(item.path)}
+                  className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs [-webkit-app-region:no-drag] ${isActive
                       ? "rounded-xl bg-blue-500/80 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.4)]"
                       : "rounded-xl text-white/80 hover:bg-white/5"
-                  }`}
+                    }`}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">{item.name}</span>
                 </button>
               );
             })}
+          </div>
+        </div>
+
+        {/* Bin */}
+        <div>
+          <div className="mb-1 flex items-center justify-between px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">
+            <span>Bin</span>
+            <Trash2 className="h-3 w-3 text-white/40" />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <button
+              type="button"
+              onClick={onBinClick}
+              className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs [-webkit-app-region:no-drag] ${activeBin
+                  ? "rounded-xl bg-red-500/60 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.3)]"
+                  : "rounded-xl text-white/80 hover:bg-white/5"
+                }`}
+            >
+              <Trash2 className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Trash</span>
+              {binCount > 0 && (
+                <span className="ml-auto rounded-full bg-red-500/30 px-1.5 py-0.5 text-[10px] tabular-nums text-red-300">
+                  {binCount}
+                </span>
+              )}
+            </button>
           </div>
         </div>
       </div>

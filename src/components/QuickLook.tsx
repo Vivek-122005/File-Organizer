@@ -4,6 +4,7 @@ import { File as FileIcon } from "lucide-react";
 import type { DirEntry } from "../types/dirEntry";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { toMediaUrl } from "../utils/mediaUrl";
 
 interface QuickLookProps {
   open: boolean;
@@ -11,7 +12,22 @@ interface QuickLookProps {
   onClose: () => void;
 }
 
-const IMAGE_EXT = ["jpg", "jpeg", "png", "gif", "webp", "svg"];
+const IMAGE_EXT = [
+  "jpg",
+  "jpeg",
+  "png",
+  "gif",
+  "webp",
+  "svg",
+  "bmp",
+  "tif",
+  "tiff",
+  "ico",
+  "heic",
+  "heif",
+  "avif",
+  "jfif",
+];
 const VIDEO_EXT = ["mp4", "mov", "webm", "avi"];
 const CODE_EXT = ["js", "ts", "tsx", "jsx", "json", "py"];
 
@@ -87,7 +103,7 @@ export function QuickLook({ open, entry, onClose }: QuickLookProps) {
   if (!open || !entry) return null;
 
   const ext = getExt(entry.name);
-  const fileUrl = `media://${encodeURIComponent(entry.path)}`;
+  const fileUrl = toMediaUrl(entry.path);
 
   const image = isImage(entry.name);
   const video = isVideo(entry.name);
@@ -181,4 +197,3 @@ export function QuickLook({ open, entry, onClose }: QuickLookProps) {
     </AnimatePresence>
   );
 }
-
